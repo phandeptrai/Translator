@@ -1,92 +1,69 @@
 package com.example.translator
 
-import android.content.Intent
 import android.os.Bundle
-import android.speech.tts.TextToSpeech
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
-import androidx.room.Room
-import com.example.translator.api.RetrofitClient
-import com.example.translator.data.AppDatabase
-import com.example.translator.data.Translation
-import com.example.translator.TranslationService
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.mlkit.nl.translate.TranslateLanguage
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
 import java.util.*
 
-class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
-    private lateinit var tts: TextToSpeech
-    private lateinit var db: AppDatabase
-
+class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        tts = TextToSpeech(this, this)
-        db = Room.databaseBuilder(applicationContext, AppDatabase::class.java, "translator-db").build()
-
         setContent {
-            TranslatorApp(db, tts)
+            MaterialTheme {
+                TranslatorApp()
+            }
         }
-
-        startService(Intent(this, TranslationService::class.java))
-    }
-
-    override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) {
-            tts.language = Locale.US
-        }
-    }
-
-    override fun onDestroy() {
-        tts.shutdown()
-        super.onDestroy()
-    }
-}
-
-@Composable
-fun TranslatorApp(db: AppDatabase, tts: TextToSpeech) {
-    val navController = rememberNavController()
-    NavHost(navController = navController, startDestination = "home") {
-        composable("home") { HomeScreen(db, tts, navController) }
-        composable("history") { HistoryScreen(db, navController) }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(db: AppDatabase, tts: TextToSpeech, navController: androidx.navigation.NavController) {
-    var inputText by remember { mutableStateOf("") }
-    var translatedText by remember { mutableStateOf("") }
-    var sourceLang by remember { mutableStateOf("en") }
-    var targetLang by remember { mutableStateOf("vi") }
-    val coroutineScope = rememberCoroutineScope()
+fun TranslatorApp(viewModel: TranslatorViewModel = viewModel()) {
     val context = LocalContext.current
-    var showDialog by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+    val coroutineScope = rememberCoroutineScope()
 
-    if (showDialog) {
-        AlertDialog(
-            onDismissRequest = { showDialog = false },
-            title = { Text("Lỗi") },
-            text = { Text("Dịch thất bại. Vui lòng thử lại.") },
-            confirmButton = {
-                TextButton(onClick = { showDialog = false }) {
-                    Text("OK")
-                }
-            }
-        )
+    val sourceText by viewModel.sourceText.collectAsState()
+    val translatedText by viewModel.translatedText.collectAsState()
+    val isTranslating by viewModel.isTranslating.collectAsState()
+    val isModelDownloading by viewModel.isModelDownloading.collectAsState()
+    val isSpeaking by viewModel.isSpeaking.collectAsState()
+
+    val sourceLanguage by viewModel.sourceLanguage.collectAsState()
+    val targetLanguage by viewModel.targetLanguage.collectAsState()
+
+    val translationHistory by viewModel.translationHistory.collectAsState()
+    val showHistory by viewModel.showHistory.collectAsState()
+
+    val supportedLanguages = remember { TranslateLanguage.getAllLanguages().sorted() }
+
+    var showSourceLanguageMenu by remember { mutableStateOf(false) }
+    var showTargetLanguageMenu by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        viewModel.initManagers(context)
     }
 
     Scaffold(
@@ -94,102 +71,288 @@ fun HomeScreen(db: AppDatabase, tts: TextToSpeech, navController: androidx.navig
             TopAppBar(
                 title = { Text("Ứng dụng Dịch") },
                 actions = {
-                    var expanded by remember { mutableStateOf(false) }
-                    IconButton(onClick = { expanded = true }) {
-                        Icon(Icons.Default.Menu, contentDescription = "Menu")
-                    }
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Xem lịch sử") },
-                            onClick = {
-                                navController.navigate("history")
-                                expanded = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Xóa") },
-                            onClick = {
-                                inputText = ""
-                                translatedText = ""
-                                expanded = false
-                            }
+                    IconButton(onClick = {
+                        viewModel.toggleHistoryView()
+                    }) {
+                        Icon(
+                            if (showHistory) Icons.Default.Close else Icons.Default.History,
+                            contentDescription = if (showHistory) "Đóng lịch sử" else "Xem lịch sử"
                         )
                     }
                 }
             )
         }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            TextField(
-                value = inputText,
-                onValueChange = { inputText = it },
-                label = { Text("Nhập văn bản") },
-                modifier = Modifier.fillMaxWidth()
+    ) { paddingValues ->
+        if (showHistory) {
+            // Hiển thị lịch sử dịch
+            HistoryScreen(
+                history = translationHistory,
+                onItemClick = { viewModel.useHistoryItem(it) },
+                onDeleteItem = { viewModel.deleteHistoryItem(it) },
+                onClearHistory = { viewModel.clearHistory() },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(16.dp)
             )
-            Row {
-                TextField(
-                    value = sourceLang,
-                    onValueChange = { sourceLang = it },
-                    label = { Text("Ngôn ngữ nguồn") },
-                    modifier = Modifier.weight(1f)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                TextField(
-                    value = targetLang,
-                    onValueChange = { targetLang = it },
-                    label = { Text("Ngôn ngữ đích") },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            Button(onClick = {
-                coroutineScope.launch {
-                    try {
-                        val response = RetrofitClient.api.translate(
-                            inputText,
-                            sourceLang,
-                            targetLang,
-                            "YOUR_API_KEY"
-                        )
-                        translatedText = response.data.translations[0].translatedText
-                        db.translationDao().insert(
-                            Translation(
-                                inputText = inputText,
-                                translatedText = translatedText,
-                                sourceLang = sourceLang,
-                                targetLang = targetLang,
-                                timestamp = System.currentTimeMillis()
-                            )
-                        )
-                        Toast.makeText(context, "Đã lưu bản dịch", Toast.LENGTH_SHORT).show()
-                    } catch (e: Exception) {
-                        showDialog = true
+        } else {
+            // Màn hình dịch chính
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Phần chọn ngôn ngữ
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Ngôn ngữ nguồn
+                    Box(modifier = Modifier.weight(1f)) {
+                        Column {
+                            Text("Ngôn ngữ nguồn", style = MaterialTheme.typography.bodySmall)
+                            OutlinedButton(
+                                onClick = { showSourceLanguageMenu = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(getLanguageDisplayName(sourceLanguage))
+                                Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                            }
+                        }
+                        DropdownMenu(
+                            expanded = showSourceLanguageMenu,
+                            onDismissRequest = { showSourceLanguageMenu = false }
+                        ) {
+                            supportedLanguages.forEach { language ->
+                                DropdownMenuItem(
+                                    text = { Text(getLanguageDisplayName(language)) },
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            viewModel.setSourceLanguage(language)
+                                            showSourceLanguageMenu = false
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Nút đổi ngôn ngữ
+                    IconButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                viewModel.swapLanguages()
+                            }
+                        },
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    ) {
+                        Icon(Icons.Default.SwapHoriz, contentDescription = "Đổi ngôn ngữ")
+                    }
+
+                    // Ngôn ngữ đích
+                    Box(modifier = Modifier.weight(1f)) {
+                        Column {
+                            Text("Ngôn ngữ đích", style = MaterialTheme.typography.bodySmall)
+                            OutlinedButton(
+                                onClick = { showTargetLanguageMenu = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(getLanguageDisplayName(targetLanguage))
+                                Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                            }
+                        }
+                        DropdownMenu(
+                            expanded = showTargetLanguageMenu,
+                            onDismissRequest = { showTargetLanguageMenu = false }
+                        ) {
+                            supportedLanguages.forEach { language ->
+                                DropdownMenuItem(
+                                    text = { Text(getLanguageDisplayName(language)) },
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            viewModel.setTargetLanguage(language)
+                                            showTargetLanguageMenu = false
+                                        }
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
-            }) {
-                Text("Dịch")
-            }
-            Text("Kết quả: $translatedText")
-            Button(onClick = { tts.speak(translatedText, TextToSpeech.QUEUE_FLUSH, null, null) }) {
-                Text("Phát âm")
-            }
-            Button(onClick = {
-                val intent = Intent().apply {
-                    action = Intent.ACTION_SEND
-                    putExtra(Intent.EXTRA_TEXT, translatedText)
-                    type = "text/plain"
+
+                // Phần nhập văn bản
+                OutlinedTextField(
+                    value = sourceText,
+                    onValueChange = { viewModel.updateSourceText(it) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp),
+                    label = { Text("Nhập văn bản") },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            focusManager.clearFocus()
+                            coroutineScope.launch {
+                                viewModel.translate()
+                            }
+                        }
+                    )
+                )
+
+                // Nút dịch
+                Button(
+                    onClick = {
+                        focusManager.clearFocus()
+                        coroutineScope.launch {
+                            viewModel.translate()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isTranslating && !isModelDownloading && sourceText.isNotBlank()
+                ) {
+                    if (isModelDownloading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Đang tải mô hình...")
+                    } else if (isTranslating) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Đang dịch...")
+                    } else {
+                        Text("Dịch")
+                    }
                 }
-                context.startActivity(Intent.createChooser(intent, "Chia sẻ bản dịch"))
-            }) {
-                Text("Chia sẻ")
+
+                // Kết quả dịch
+                if (translatedText.isNotBlank()) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Text(
+                                text = translatedText,
+                                modifier = Modifier
+                                    .padding(16.dp)
+                                    .weight(1f),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+
+                            // Các nút chức năng
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                // Nút phát âm
+                                IconButton(
+                                    onClick = {
+                                        if (isSpeaking) {
+                                            viewModel.stopSpeaking()
+                                        } else {
+                                            viewModel.speakTranslatedText()
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        if (isSpeaking) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                                        contentDescription = if (isSpeaking) "Dừng phát âm" else "Phát âm"
+                                    )
+                                }
+
+                                // Nút chia sẻ
+                                IconButton(
+                                    onClick = {
+                                        viewModel.shareTranslation()
+                                    }
+                                ) {
+                                    Icon(
+                                        Icons.Default.Share,
+                                        contentDescription = "Chia sẻ"
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun HistoryScreen(
+    history: List<TranslationHistoryItem>,
+    onItemClick: (TranslationHistoryItem) -> Unit,
+    onDeleteItem: (TranslationHistoryItem) -> Unit,
+    onClearHistory: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Lịch sử dịch",
+                style = MaterialTheme.typography.headlineSmall
+            )
+
+            if (history.isNotEmpty()) {
+                TextButton(
+                    onClick = onClearHistory
+                ) {
+                    Text("Xóa tất cả")
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (history.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Chưa có lịch sử dịch",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(history) { item ->
+                    HistoryItem(
+                        item = item,
+                        onClick = { onItemClick(item) },
+                        onDelete = { onDeleteItem(item) }
+                    )
+                }
             }
         }
     }
@@ -197,24 +360,89 @@ fun HomeScreen(db: AppDatabase, tts: TextToSpeech, navController: androidx.navig
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HistoryScreen(db: AppDatabase, navController: androidx.navigation.NavController) {
-    val translations by db.translationDao().getAllTranslations().collectAsState(initial = emptyList())
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Lịch sử dịch") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Quay lại")
-                    }
-                }
+fun HistoryItem(
+    item: TranslationHistoryItem,
+    onClick: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()) }
+
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${getLanguageDisplayName(item.sourceLanguage)} → ${getLanguageDisplayName(item.targetLanguage)}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                Text(
+                    text = dateFormat.format(item.timestamp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = item.sourceText,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
-        }
-    ) { padding ->
-        LazyColumn(modifier = Modifier.padding(padding)) {
-            items(translations) { translation ->
-                Text("${translation.inputText} -> ${translation.translatedText} (${translation.sourceLang} sang ${translation.targetLang})")
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = item.translatedText,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                IconButton(
+                    onClick = onDelete
+                ) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Xóa",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+fun getLanguageDisplayName(languageCode: String): String {
+    return when (languageCode) {
+        TranslateLanguage.ENGLISH -> "Tiếng Anh"
+        TranslateLanguage.VIETNAMESE -> "Tiếng Việt"
+        TranslateLanguage.CHINESE -> "Tiếng Trung"
+        TranslateLanguage.JAPANESE -> "Tiếng Nhật"
+        TranslateLanguage.KOREAN -> "Tiếng Hàn"
+        TranslateLanguage.FRENCH -> "Tiếng Pháp"
+        TranslateLanguage.GERMAN -> "Tiếng Đức"
+        TranslateLanguage.RUSSIAN -> "Tiếng Nga"
+        TranslateLanguage.SPANISH -> "Tiếng Tây Ban Nha"
+        TranslateLanguage.ITALIAN -> "Tiếng Ý"
+        else -> languageCode.replaceFirstChar { it.uppercase() }
     }
 }

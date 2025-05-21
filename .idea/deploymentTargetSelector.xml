@@ -4,10 +4,10 @@
     <selectionStates>
       <SelectionState runConfigName="translator.app">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2025-05-20T15:24:29.483539200Z">
+        <DropdownSelection timestamp="2025-05-21T06:22:17.090124400Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\ANH VU\.android\avd\Pixel_8.avd" />
+              <DeviceId pluginId="PhysicalDevice" identifier="serial=NB8TEY7DFEQ47XPN" />
             </handle>
           </Target>
         </DropdownSelection>

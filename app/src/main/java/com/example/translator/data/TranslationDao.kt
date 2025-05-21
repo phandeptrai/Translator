@@ -8,8 +8,8 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface TranslationDao {
     @Insert
-    suspend fun insert(translation: Translation)
+    suspend fun insert(translation: Translations)
 
     @Query("SELECT * FROM translations ORDER BY timestamp DESC")
-    fun getAllTranslations(): Flow<List<Translation>>
+    fun getAllTranslations(): Flow<List<Translations>>
 }

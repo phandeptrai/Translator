@@ -4,7 +4,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 @Entity(tableName = "translations")
-data class Translation(
+data class Translations(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val inputText: String,
     val translatedText: String,

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "377253710945",
+    "project_id": "translator-eab32",
+    "storage_bucket": "translator-eab32.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:377253710945:android:2a4c7ea26ad66d64ce2e20",
+        "android_client_info": {
+          "package_name": "com.example.translator"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA9oe9sl4mdbz1Lh54-72BringGm_-XAl4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

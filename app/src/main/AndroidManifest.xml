@@ -23,6 +23,5 @@
             android:name=".provider.TranslationProvider"
             android:authorities="com.example.translator.provider"
             android:exported="true" />
-        <service android:name=".TranslationService" />
     </application>
 </manifest>
