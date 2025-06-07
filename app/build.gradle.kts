@@ -1,23 +1,26 @@
 plugins {
-    alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
-    kotlin("kapt")
-    id("com.google.gms.google-services")
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("kotlin-kapt")
+    id("com.google.dagger.hilt.android")
+    id("org.jetbrains.kotlin.plugin.compose") version "2.0.21"
 }
 
 android {
     namespace = "com.example.translator"
-    compileSdk = 36 // Nâng cấp lên SDK 36 theo khuyến nghị
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.example.translator"
-        minSdk = 31
-        targetSdk = 34 // Giữ nguyên targetSdk vì nó không ảnh hưởng đến vấn đề biên dịch
+        minSdk = 26
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        vectorDrawables {
+            useSupportLibrary = true
+        }
     }
 
     buildTypes {
@@ -29,102 +32,74 @@ android {
             )
         }
     }
-
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
-
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
     }
-
     buildFeatures {
         compose = true
     }
-
-    // Giữ nguyên cấu hình này để xử lý tệp trùng lặp
-    packagingOptions {
+    composeOptions {
+        kotlinCompilerExtensionVersion = "2.0.21"
+    }
+    packaging {
         resources {
-            excludes += listOf(
-                "META-INF/DEPENDENCIES",
-                "META-INF/LICENSE",
-                "META-INF/LICENSE.txt",
-                "META-INF/license.txt",
-                "META-INF/NOTICE",
-                "META-INF/NOTICE.txt",
-                "META-INF/notice.txt",
-                "META-INF/ASL2.0",
-                "META-INF/*.kotlin_module"
-            )
-            pickFirsts += listOf(
-                "lib/arm64-v8a/libtranslate_jni.so",
-                "lib/armeabi-v7a/libtranslate_jni.so",
-                "lib/x86/libtranslate_jni.so",
-                "lib/x86_64/libtranslate_jni.so"
-            )
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
-}
-
-// Thêm chiến lược giải quyết xung đột phụ thuộc
-configurations.all {
-    resolutionStrategy {
-        force("com.google.android.gms:play-services-basement:18.2.0")
-        force("com.google.android.gms:play-services-base:18.2.0")
-        force("com.google.android.gms:play-services-tasks:18.0.2")
+    kapt {
+        correctErrorTypes = true
+        useBuildCache = true
     }
 }
 
 dependencies {
-    // AndroidX Core - Sử dụng phiên bản tương thích với compileSdk 36
-    implementation(libs.androidx.core.ktx) // Đảm bảo version catalog đã được cập nhật
-    implementation(libs.androidx.lifecycle.runtime.ktx)
+    val composeBom = platform("androidx.compose:compose-bom:2024.02.00")
+    implementation(composeBom)
+    androidTestImplementation(composeBom)
 
-    // Compose
-    implementation(libs.androidx.activity.compose) // Đảm bảo version catalog đã được cập nhật
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.ui)
-    implementation(libs.androidx.ui.graphics)
-    implementation(libs.androidx.ui.tooling.preview)
-    implementation(libs.androidx.material3)
+    // Core Android dependencies
+    implementation("androidx.core:core-ktx:1.12.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+    implementation("androidx.activity:activity-compose:1.8.2")
 
-    // Navigation
-    implementation("androidx.navigation:navigation-compose:2.7.6")
+    // Compose dependencies
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-graphics")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+    implementation("androidx.navigation:navigation-compose:2.7.7")
 
-    // Room
-    implementation("androidx.room:room-runtime:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
-    kapt("androidx.room:room-compiler:2.6.1")
+    // Hilt dependencies
+    implementation("com.google.dagger:hilt-android:2.50")
+    kapt("com.google.dagger:hilt-android-compiler:2.50")
+    implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
 
-    // Retrofit & Networking
+    // Room dependencies
+    val roomVersion = "2.6.1"
+    implementation("androidx.room:room-runtime:$roomVersion")
+    implementation("androidx.room:room-ktx:$roomVersion")
+    kapt("androidx.room:room-compiler:$roomVersion")
+
+    // Retrofit dependencies
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
-    implementation("com.google.code.gson:gson:2.10.1")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    kapt("com.squareup.retrofit2:retrofit:2.9.0")
 
-    // ML Kit
-    implementation("com.google.mlkit:translate:16.1.2")
+    // ML Kit Translation
+    implementation("com.google.mlkit:translate:17.0.2")
 
-    // Firebase
-    implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
-    implementation("com.google.firebase:firebase-analytics-ktx")
-
-    // Material Icons Extended
-    implementation("androidx.compose.material:material-icons-extended:1.5.4")
-
-    // Testing
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.ui.test.junit4)
-    debugImplementation(libs.androidx.ui.tooling)
-    debugImplementation(libs.androidx.ui.test.manifest)
-    implementation ("androidx.activity:activity-compose:1.8.0")
-    implementation ("androidx.compose.ui:ui:1.6.0")
-    implementation ("androidx.compose.material:material:1.6.0")
-    implementation ("androidx.compose.ui:ui-tooling-preview:1.6.0")
-    implementation("androidx.compose.material:material-icons-extended:1.6.0")
-
+    // Testing dependencies
+    testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-tooling")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
