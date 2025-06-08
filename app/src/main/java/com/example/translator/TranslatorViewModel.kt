@@ -5,6 +5,9 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.mlkit.nl.translate.TranslateLanguage
+import com.example.translator.ui.screens.TranslationHistoryItem
+import com.example.translator.utils.managers.*
+import com.example.translator.utils.speech.SpeechRecognizerManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,8 +18,8 @@ class TranslatorViewModel : ViewModel() {
     private val TAG = "TranslatorViewModel"
 
     private lateinit var translationManager: TranslationManager
-    private lateinit var historyManager: TranslationHistoryManager
-    private lateinit var ttsManager: TextToSpeechManager
+    private lateinit var textToSpeechManager: TextToSpeechManager
+    private lateinit var translationHistoryManager: TranslationHistoryManager
     private lateinit var shareManager: ShareManager
 
     // Trạng thái UI
@@ -35,10 +38,10 @@ class TranslatorViewModel : ViewModel() {
     private val _isSpeaking = MutableStateFlow(false)
     val isSpeaking: StateFlow<Boolean> = _isSpeaking.asStateFlow()
 
-    private val _sourceLanguage = MutableStateFlow(TranslateLanguage.ENGLISH)
+    private val _sourceLanguage = MutableStateFlow("vi")
     val sourceLanguage: StateFlow<String> = _sourceLanguage.asStateFlow()
 
-    private val _targetLanguage = MutableStateFlow(TranslateLanguage.VIETNAMESE)
+    private val _targetLanguage = MutableStateFlow("en")
     val targetLanguage: StateFlow<String> = _targetLanguage.asStateFlow()
 
     private val _translationHistory = MutableStateFlow<List<TranslationHistoryItem>>(emptyList())
@@ -49,192 +52,67 @@ class TranslatorViewModel : ViewModel() {
 
     // Khởi tạo các manager
     fun initManagers(context: Context) {
-        if (!::translationManager.isInitialized) {
-            translationManager = TranslationManager(context)
-        }
-
-        if (!::historyManager.isInitialized) {
-            historyManager = TranslationHistoryManager(context)
-            viewModelScope.launch {
-                historyManager.getAllHistory().collect { history ->
-                    _translationHistory.value = history
-                }
-            }
-        }
-
-        if (!::ttsManager.isInitialized) {
-            ttsManager = TextToSpeechManager(context)
-        }
-
-        if (!::shareManager.isInitialized) {
-            shareManager = ShareManager(context)
-        }
+        translationManager = TranslationManager(context)
+        textToSpeechManager = TextToSpeechManager(context)
+        translationHistoryManager = TranslationHistoryManager(context)
+        shareManager = ShareManager(context)
     }
 
     // Cập nhật văn bản nguồn
     fun updateSourceText(text: String) {
         _sourceText.value = text
+        translate()
     }
 
     // Đặt ngôn ngữ nguồn
-    suspend fun setSourceLanguage(language: String) {
-        if (_sourceLanguage.value != language) {
-            _sourceLanguage.value = language
-            // Xóa kết quả dịch cũ khi thay đổi ngôn ngữ
-            _translatedText.value = ""
-            // Tải mô hình mới nếu cần
-            downloadModelIfNeeded()
-        }
+    fun setSourceLanguage(language: String) {
+        _sourceLanguage.value = language
+        translate()
     }
 
     // Đặt ngôn ngữ đích
-    suspend fun setTargetLanguage(language: String) {
-        if (_targetLanguage.value != language) {
-            _targetLanguage.value = language
-            // Xóa kết quả dịch cũ khi thay đổi ngôn ngữ
-            _translatedText.value = ""
-            // Tải mô hình mới nếu cần
-            downloadModelIfNeeded()
-        }
+    fun setTargetLanguage(language: String) {
+        _targetLanguage.value = language
+        translate()
     }
 
     // Đổi ngôn ngữ nguồn và đích
-    suspend fun swapLanguages() {
-        val tempSourceLang = _sourceLanguage.value
+    fun swapLanguages() {
+        val temp = _sourceLanguage.value
         _sourceLanguage.value = _targetLanguage.value
-        _targetLanguage.value = tempSourceLang
-
-        // Xóa kết quả dịch cũ khi đổi ngôn ngữ
-        _translatedText.value = ""
-
-        // Tải mô hình mới nếu cần
-        downloadModelIfNeeded()
-    }
-
-    // Tải mô hình ngôn ngữ nếu cần
-    private suspend fun downloadModelIfNeeded(): Boolean {
-        return try {
-            translationManager.downloadModelIfNeeded(
-                _sourceLanguage.value,
-                _targetLanguage.value
-            ) { state ->
-                when (state) {
-                    is TranslationManager.ModelState.Loading -> {
-                        _isModelDownloading.value = true
-                    }
-                    is TranslationManager.ModelState.Ready -> {
-                        _isModelDownloading.value = false
-                    }
-                    is TranslationManager.ModelState.Error -> {
-                        _isModelDownloading.value = false
-                        Log.e(TAG, "Model download error: ${state.message}")
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error downloading model", e)
-            _isModelDownloading.value = false
-            false
-        }
+        _targetLanguage.value = temp
+        translate()
     }
 
     // Thực hiện dịch văn bản
-    suspend fun translate() {
-        if (_sourceText.value.isBlank()) {
-            _translatedText.value = ""
-            return
-        }
-
-        try {
-            // Đảm bảo mô hình đã được tải
-            val modelReady = downloadModelIfNeeded()
-            if (!modelReady) {
-                Log.e(TAG, "Model not ready, cannot translate")
-                return
-            }
-
-            // Thực hiện dịch
+    private fun translate() {
+        viewModelScope.launch {
             val result = translationManager.translate(
                 _sourceText.value,
                 _sourceLanguage.value,
                 _targetLanguage.value
-            ) { state ->
-                when (state) {
-                    is TranslationManager.TranslationState.Idle -> {
-                        _isTranslating.value = false
-                    }
-                    is TranslationManager.TranslationState.Translating -> {
-                        _isTranslating.value = true
-                    }
-                    is TranslationManager.TranslationState.Success -> {
-                        _isTranslating.value = false
-                        _translatedText.value = state.translatedText
-                    }
-                    is TranslationManager.TranslationState.Error -> {
-                        _isTranslating.value = false
-                        Log.e(TAG, "Translation error: ${state.message}")
-                    }
-                }
-            }
+            )
+            _translatedText.value = result
 
-            // Lưu vào lịch sử nếu dịch thành công
             if (result.isNotBlank()) {
-                historyManager.addToHistory(
+                translationHistoryManager.addToHistory(
                     _sourceText.value,
                     result,
                     _sourceLanguage.value,
                     _targetLanguage.value
                 )
             }
-        } catch (e: Exception) {
-            _isTranslating.value = false
-            Log.e(TAG, "Error during translation", e)
         }
     }
 
     // Phát âm văn bản đã dịch
-    fun speakTranslatedText() {
-        if (_translatedText.value.isBlank()) return
-
-        viewModelScope.launch {
-            _isSpeaking.value = true
-
-            val state = ttsManager.speak(_translatedText.value, _targetLanguage.value)
-
-            when (state) {
-                is TextToSpeechManager.TtsState.Speaking -> {
-                    // Đang phát âm, không cần làm gì
-                }
-                is TextToSpeechManager.TtsState.Completed -> {
-                    _isSpeaking.value = false
-                }
-                is TextToSpeechManager.TtsState.Error -> {
-                    _isSpeaking.value = false
-                    Log.e(TAG, "TTS error: ${state.message}")
-                }
-                else -> {
-                    _isSpeaking.value = false
-                }
-            }
-        }
-    }
-
-    // Dừng phát âm
-    fun stopSpeaking() {
-        ttsManager.stop()
-        _isSpeaking.value = false
+    fun speakText() {
+        textToSpeechManager.speak(_translatedText.value, _targetLanguage.value)
     }
 
     // Chia sẻ bản dịch
     fun shareTranslation() {
-        if (_sourceText.value.isBlank() || _translatedText.value.isBlank()) return
-
-        shareManager.shareTranslation(
-            _sourceText.value,
-            _translatedText.value,
-            getLanguageDisplayName(_sourceLanguage.value),
-            getLanguageDisplayName(_targetLanguage.value)
-        )
+        shareManager.shareText(_translatedText.value)
     }
 
     // Hiển thị/ẩn lịch sử dịch
@@ -253,42 +131,17 @@ class TranslatorViewModel : ViewModel() {
 
     // Xóa một mục khỏi lịch sử
     fun deleteHistoryItem(item: TranslationHistoryItem) {
-        viewModelScope.launch {
-            historyManager.deleteFromHistory(item)
-        }
+        translationHistoryManager.deleteHistoryItem(item)
     }
 
     // Xóa tất cả lịch sử
     fun clearHistory() {
-        viewModelScope.launch {
-            historyManager.clearHistory()
-        }
-    }
-
-    // Lấy tên hiển thị của ngôn ngữ
-    private fun getLanguageDisplayName(languageCode: String): String {
-        return when (languageCode) {
-            TranslateLanguage.ENGLISH -> "Tiếng Anh"
-            TranslateLanguage.VIETNAMESE -> "Tiếng Việt"
-            TranslateLanguage.CHINESE -> "Tiếng Trung"
-            TranslateLanguage.JAPANESE -> "Tiếng Nhật"
-            TranslateLanguage.KOREAN -> "Tiếng Hàn"
-            TranslateLanguage.FRENCH -> "Tiếng Pháp"
-            TranslateLanguage.GERMAN -> "Tiếng Đức"
-            TranslateLanguage.RUSSIAN -> "Tiếng Nga"
-            TranslateLanguage.SPANISH -> "Tiếng Tây Ban Nha"
-            TranslateLanguage.ITALIAN -> "Tiếng Ý"
-            else -> languageCode.replaceFirstChar { it.uppercase() }
-        }
+        translationHistoryManager.clearHistory()
     }
 
     override fun onCleared() {
         super.onCleared()
-        if (::translationManager.isInitialized) {
-            translationManager.close()
-        }
-        if (::ttsManager.isInitialized) {
-            ttsManager.shutdown()
-        }
+        translationManager.shutdown()
+        textToSpeechManager.shutdown()
     }
 }
