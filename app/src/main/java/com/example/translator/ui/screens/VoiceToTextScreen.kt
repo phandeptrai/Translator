@@ -8,8 +8,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.translator.speechtotext.SpeechRecognizerManager
 import com.example.translator.ui.components.MicButton
-import com.example.translator.voicetotext.SpeechRecognizerManager
 
 
 @Composable

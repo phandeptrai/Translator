@@ -17,13 +17,16 @@ import com.example.translator.TranslatorViewModel
 import com.example.translator.ui.components.LanguageSelector
 import com.example.translator.ui.components.TranslationInput
 import com.example.translator.ui.components.TranslationOutput
-import com.example.translator.utils.speech.SpeechRecognizerManager
+import com.example.translator.speechtotext.SpeechRecognizerManager
 import com.google.mlkit.nl.translate.TranslateLanguage
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(viewModel: TranslatorViewModel = viewModel()) {
+fun MainScreen(
+    viewModel: TranslatorViewModel = viewModel(),
+    onShowHistory: () -> Unit
+) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val coroutineScope = rememberCoroutineScope()
@@ -35,9 +38,6 @@ fun MainScreen(viewModel: TranslatorViewModel = viewModel()) {
     val isSpeaking by viewModel.isSpeaking.collectAsState()
     val sourceLanguage by viewModel.sourceLanguage.collectAsState()
     val targetLanguage by viewModel.targetLanguage.collectAsState()
-    val translationHistory by viewModel.translationHistory.collectAsState()
-    val showHistory by viewModel.showHistory.collectAsState()
-
     val supportedLanguages = remember { TranslateLanguage.getAllLanguages().sorted() }
 
     var showSourceLanguageMenu by remember { mutableStateOf(false) }
@@ -73,82 +73,69 @@ fun MainScreen(viewModel: TranslatorViewModel = viewModel()) {
             TopAppBar(
                 title = { Text("Ứng dụng Dịch") },
                 actions = {
-                    IconButton(onClick = { viewModel.toggleHistoryView() }) {
+                    IconButton(onClick = onShowHistory) {
                         Icon(
-                            if (showHistory) Icons.Default.Close else Icons.Default.History,
-                            contentDescription = if (showHistory) "Đóng lịch sử" else "Xem lịch sử"
+                            Icons.Default.History,
+                            contentDescription = "Xem lịch sử"
                         )
                     }
                 }
             )
         }
     ) { paddingValues ->
-        if (showHistory) {
-            HistoryScreen(
-                history = translationHistory,
-                onItemClick = { viewModel.useHistoryItem(it) },
-                onDeleteItem = { viewModel.deleteHistoryItem(it) },
-                onClearHistory = { viewModel.clearHistory() },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(16.dp)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            LanguageSelector(
+                sourceLanguage = sourceLanguage,
+                targetLanguage = targetLanguage,
+                supportedLanguages = supportedLanguages,
+                onSourceLanguageSelected = { language ->
+                    coroutineScope.launch {
+                        viewModel.setSourceLanguage(language)
+                        showSourceLanguageMenu = false
+                    }
+                },
+                onTargetLanguageSelected = { language ->
+                    coroutineScope.launch {
+                        viewModel.setTargetLanguage(language)
+                        showTargetLanguageMenu = false
+                    }
+                },
+                onSwapLanguages = {
+                    coroutineScope.launch {
+                        viewModel.swapLanguages()
+                    }
+                }
             )
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                LanguageSelector(
-                    sourceLanguage = sourceLanguage,
-                    targetLanguage = targetLanguage,
-                    supportedLanguages = supportedLanguages,
-                    onSourceLanguageSelected = { language ->
-                        coroutineScope.launch {
-                            viewModel.setSourceLanguage(language)
-                            showSourceLanguageMenu = false
-                        }
-                    },
-                    onTargetLanguageSelected = { language ->
-                        coroutineScope.launch {
-                            viewModel.setTargetLanguage(language)
-                            showTargetLanguageMenu = false
-                        }
-                    },
-                    onSwapLanguages = {
-                        coroutineScope.launch {
-                            viewModel.swapLanguages()
-                        }
-                    }
-                )
 
-                TranslationInput(
-                    sourceText = sourceText,
-                    onSourceTextChange = { viewModel.updateSourceText(it) },
-                    isRecording = isRecording,
-                    onRecordClick = {
-                        if (isRecording) {
-                            speechRecognizerManager.stopListening()
-                            isRecording = false
-                        } else {
-                            speechRecognizerManager.startListening()
-                            isRecording = true
-                        }
+            TranslationInput(
+                sourceText = sourceText,
+                onSourceTextChange = { viewModel.updateSourceText(it) },
+                isRecording = isRecording,
+                onRecordClick = {
+                    if (isRecording) {
+                        speechRecognizerManager.stopListening()
+                        isRecording = false
+                    } else {
+                        speechRecognizerManager.startListening()
+                        isRecording = true
                     }
-                )
+                }
+            )
 
-                TranslationOutput(
-                    translatedText = translatedText,
-                    isTranslating = isTranslating,
-                    isModelDownloading = isModelDownloading,
-                    isSpeaking = isSpeaking,
-                    onSpeakClick = { viewModel.speakText() },
-                    onShareClick = { viewModel.shareTranslation() }
-                )
-            }
+            TranslationOutput(
+                translatedText = translatedText,
+                isTranslating = isTranslating,
+                isModelDownloading = isModelDownloading,
+                isSpeaking = isSpeaking,
+                onSpeakClick = { viewModel.speakText() },
+                onShareClick = { viewModel.shareTranslation() }
+            )
         }
     }
 } 

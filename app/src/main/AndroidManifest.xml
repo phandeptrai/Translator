@@ -23,10 +23,5 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <provider
-            android:name=".provider.TranslationProvider"
-            android:authorities="com.example.translator.provider"
-            android:exported="true" />
     </application>
 </manifest>

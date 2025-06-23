@@ -1,4 +1,4 @@
-package com.example.translator.voicetotext
+package com.example.translator.speechtotext
 
 import android.content.Context
 import android.content.Intent

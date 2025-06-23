@@ -1,4 +1,4 @@
-package com.example.translator.utils.managers
+package com.example.translator.translation
 
 import android.content.Context
 import android.content.SharedPreferences

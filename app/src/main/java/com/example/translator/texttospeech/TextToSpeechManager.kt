@@ -1,4 +1,4 @@
-package com.example.translator.utils.managers
+package com.example.translator.texttospeech
 
 import android.content.Context
 import android.speech.tts.TextToSpeech

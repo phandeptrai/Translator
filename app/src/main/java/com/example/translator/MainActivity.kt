@@ -8,7 +8,17 @@ import androidx.activity.compose.setContent
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.translator.ui.screens.MainScreen
+import com.example.translator.ui.screens.HistoryScreen
 import com.example.translator.ui.theme.TranslatorTheme
+import androidx.navigation.compose.rememberNavController
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.collectAsState
+import com.example.translator.navigation.AppNavGraph
+
+sealed class Screen(val route: String) {
+    object Main : Screen("main")
+    object History : Screen("history")
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -16,7 +26,8 @@ class MainActivity : ComponentActivity() {
         requestAudioPermission()
         setContent {
             TranslatorTheme {
-                MainScreen()
+                val navController = rememberNavController()
+                AppNavGraph(navController = navController)
             }
         }
     }

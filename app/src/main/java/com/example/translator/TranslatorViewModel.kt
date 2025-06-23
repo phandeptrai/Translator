@@ -6,13 +6,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.example.translator.ui.screens.TranslationHistoryItem
+import com.example.translator.translation.*
+import com.example.translator.texttospeech.*
 import com.example.translator.utils.managers.*
-import com.example.translator.utils.speech.SpeechRecognizerManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 
 class TranslatorViewModel : ViewModel() {
     private val TAG = "TranslatorViewModel"
@@ -50,6 +53,8 @@ class TranslatorViewModel : ViewModel() {
     private val _showHistory = MutableStateFlow(false)
     val showHistory: StateFlow<Boolean> = _showHistory.asStateFlow()
 
+    private var translateJob: Job? = null
+
     // Khởi tạo các manager
     fun initManagers(context: Context) {
         translationManager = TranslationManager(context)
@@ -61,19 +66,27 @@ class TranslatorViewModel : ViewModel() {
     // Cập nhật văn bản nguồn
     fun updateSourceText(text: String) {
         _sourceText.value = text
-        translate()
+        debounceTranslate()
+    }
+
+    private fun debounceTranslate() {
+        translateJob?.cancel()
+        translateJob = viewModelScope.launch {
+            delay(700)
+            translate()
+        }
     }
 
     // Đặt ngôn ngữ nguồn
     fun setSourceLanguage(language: String) {
         _sourceLanguage.value = language
-        translate()
+        debounceTranslate()
     }
 
     // Đặt ngôn ngữ đích
     fun setTargetLanguage(language: String) {
         _targetLanguage.value = language
-        translate()
+        debounceTranslate()
     }
 
     // Đổi ngôn ngữ nguồn và đích
@@ -81,7 +94,15 @@ class TranslatorViewModel : ViewModel() {
         val temp = _sourceLanguage.value
         _sourceLanguage.value = _targetLanguage.value
         _targetLanguage.value = temp
-        translate()
+        debounceTranslate()
+    }
+
+    // Lấy 5 lịch sử dịch gần nhất
+    private fun updateHistory() {
+        viewModelScope.launch {
+            val history = translationHistoryManager.history.value.take(5)
+            _translationHistory.value = history
+        }
     }
 
     // Thực hiện dịch văn bản
@@ -101,6 +122,7 @@ class TranslatorViewModel : ViewModel() {
                     _sourceLanguage.value,
                     _targetLanguage.value
                 )
+                updateHistory()
             }
         }
     }
@@ -118,6 +140,9 @@ class TranslatorViewModel : ViewModel() {
     // Hiển thị/ẩn lịch sử dịch
     fun toggleHistoryView() {
         _showHistory.value = !_showHistory.value
+        if (_showHistory.value) {
+            updateHistory()
+        }
     }
 
     // Sử dụng một mục từ lịch sử
@@ -132,11 +157,13 @@ class TranslatorViewModel : ViewModel() {
     // Xóa một mục khỏi lịch sử
     fun deleteHistoryItem(item: TranslationHistoryItem) {
         translationHistoryManager.deleteHistoryItem(item)
+        updateHistory()
     }
 
     // Xóa tất cả lịch sử
     fun clearHistory() {
         translationHistoryManager.clearHistory()
+        updateHistory()
     }
 
     override fun onCleared() {

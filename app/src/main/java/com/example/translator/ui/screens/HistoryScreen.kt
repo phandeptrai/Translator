@@ -17,38 +17,53 @@ import java.util.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(
-    history: List<TranslationHistoryItem>,
-    onItemClick: (TranslationHistoryItem) -> Unit,
-    onDeleteItem: (TranslationHistoryItem) -> Unit,
-    onClearHistory: () -> Unit,
+    history: List<TranslationHistoryItem> = emptyList(),
+    onItemClick: (TranslationHistoryItem) -> Unit = {},
+    onDeleteItem: (TranslationHistoryItem) -> Unit = {},
+    onClearHistory: () -> Unit = {},
+    onBack: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = modifier) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+    Surface(
+        color = MaterialTheme.colorScheme.background,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(16.dp)
         ) {
-            Text(
-                "Lịch sử dịch",
-                style = MaterialTheme.typography.titleLarge
-            )
-            TextButton(onClick = onClearHistory) {
-                Text("Xóa tất cả")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Quay lại")
+                    }
+                    Text(
+                        "Lịch sử dịch",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                }
+                TextButton(onClick = onClearHistory) {
+                    Text("Xóa tất cả")
+                }
             }
-        }
 
-        Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(history) { item ->
-                HistoryItem(
-                    item = item,
-                    onClick = { onItemClick(item) },
-                    onDelete = { onDeleteItem(item) }
-                )
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(history) { item ->
+                    HistoryItem(
+                        item = item,
+                        onClick = { onItemClick(item) },
+                        onDelete = { onDeleteItem(item) }
+                    )
+                }
             }
         }
     }
@@ -63,7 +78,10 @@ private fun HistoryItem(
 ) {
     Card(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
     ) {
         Column(
             modifier = Modifier
