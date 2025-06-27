@@ -93,7 +93,10 @@ dependencies {
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
     // ML Kit Translation
+
     implementation("com.google.mlkit:translate:17.0.2")
+
+
 
     // Testing dependencies
     testImplementation("junit:junit:4.13.2")

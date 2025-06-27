@@ -18,14 +18,14 @@ import com.example.translator.ui.components.LanguageSelector
 import com.example.translator.ui.components.TranslationInput
 import com.example.translator.ui.components.TranslationOutput
 import com.example.translator.speechtotext.SpeechRecognizerManager
-import com.google.mlkit.nl.translate.TranslateLanguage
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
     viewModel: TranslatorViewModel = viewModel(),
-    onShowHistory: () -> Unit
+    onShowHistory: () -> Unit,
+    onShowOfflineLanguages: () -> Unit
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
@@ -38,7 +38,8 @@ fun MainScreen(
     val isSpeaking by viewModel.isSpeaking.collectAsState()
     val sourceLanguage by viewModel.sourceLanguage.collectAsState()
     val targetLanguage by viewModel.targetLanguage.collectAsState()
-    val supportedLanguages = remember { TranslateLanguage.getAllLanguages().sorted() }
+    val downloadedLanguages by viewModel.downloadedLanguages.collectAsState()
+    val supportedLanguages = remember { commonLanguages.map { it.code } }
 
     var showSourceLanguageMenu by remember { mutableStateOf(false) }
     var showTargetLanguageMenu by remember { mutableStateOf(false) }
@@ -73,6 +74,9 @@ fun MainScreen(
             TopAppBar(
                 title = { Text("Ứng dụng Dịch") },
                 actions = {
+                    IconButton(onClick = onShowOfflineLanguages) {
+                        Icon(Icons.Default.Download, contentDescription = "Tải xuống ngôn ngữ offline")
+                    }
                     IconButton(onClick = onShowHistory) {
                         Icon(
                             Icons.Default.History,
@@ -94,6 +98,7 @@ fun MainScreen(
                 sourceLanguage = sourceLanguage,
                 targetLanguage = targetLanguage,
                 supportedLanguages = supportedLanguages,
+                downloadedLanguages = downloadedLanguages,
                 onSourceLanguageSelected = { language ->
                     coroutineScope.launch {
                         viewModel.setSourceLanguage(language)

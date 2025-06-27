@@ -10,10 +10,12 @@ import androidx.navigation.compose.composable
 import com.example.translator.TranslatorViewModel
 import com.example.translator.ui.screens.HistoryScreen
 import com.example.translator.ui.screens.MainScreen
+import com.example.translator.ui.screens.OfflineLanguagesScreen
 
 sealed class Screen(val route: String) {
     object Main : Screen("main")
     object History : Screen("history")
+    object OfflineLanguages : Screen("offline_languages")
 }
 
 @Composable
@@ -25,7 +27,8 @@ fun AppNavGraph(
         composable(Screen.Main.route) {
             MainScreen(
                 viewModel = viewModel,
-                onShowHistory = { navController.navigate(Screen.History.route) }
+                onShowHistory = { navController.navigate(Screen.History.route) },
+                onShowOfflineLanguages = { navController.navigate(Screen.OfflineLanguages.route) }
             )
         }
         composable(Screen.History.route) {
@@ -35,6 +38,12 @@ fun AppNavGraph(
                 onItemClick = { viewModel.useHistoryItem(it); navController.popBackStack() },
                 onDeleteItem = { viewModel.deleteHistoryItem(it) },
                 onClearHistory = { viewModel.clearHistory() },
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(Screen.OfflineLanguages.route) {
+            OfflineLanguagesScreen(
+                viewModel = viewModel,
                 onBack = { navController.popBackStack() }
             )
         }

@@ -4,18 +4,21 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.google.mlkit.nl.translate.TranslateLanguage
+import com.example.translator.ui.screens.commonLanguages
+import com.example.translator.ui.screens.getLanguageName
 
 @Composable
 fun LanguageSelector(
     sourceLanguage: String,
     targetLanguage: String,
-    supportedLanguages: List<String>,
+    supportedLanguages: List<String> = commonLanguages.map { it.code },
+    downloadedLanguages: Set<String> = emptySet(),
     onSourceLanguageSelected: (String) -> Unit,
     onTargetLanguageSelected: (String) -> Unit,
     onSwapLanguages: () -> Unit
@@ -35,8 +38,24 @@ fun LanguageSelector(
                     onClick = { showSourceLanguageMenu = true },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(getLanguageDisplayName(sourceLanguage))
-                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(getLanguageName(sourceLanguage))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (sourceLanguage !in downloadedLanguages) {
+                                Icon(
+                                    Icons.Default.Download,
+                                    contentDescription = "Chưa tải xuống",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                        }
+                    }
                 }
             }
             DropdownMenu(
@@ -45,8 +64,27 @@ fun LanguageSelector(
             ) {
                 supportedLanguages.forEach { language ->
                     DropdownMenuItem(
-                        text = { Text(getLanguageDisplayName(language)) },
-                        onClick = { onSourceLanguageSelected(language) }
+                        text = { 
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(getLanguageName(language))
+                                if (language !in downloadedLanguages) {
+                                    Icon(
+                                        Icons.Default.Download,
+                                        contentDescription = "Chưa tải xuống",
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        },
+                        onClick = { 
+                            onSourceLanguageSelected(language)
+                            showSourceLanguageMenu = false
+                        }
                     )
                 }
             }
@@ -66,8 +104,24 @@ fun LanguageSelector(
                     onClick = { showTargetLanguageMenu = true },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(getLanguageDisplayName(targetLanguage))
-                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(getLanguageName(targetLanguage))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (targetLanguage !in downloadedLanguages) {
+                                Icon(
+                                    Icons.Default.Download,
+                                    contentDescription = "Chưa tải xuống",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                        }
+                    }
                 }
             }
             DropdownMenu(
@@ -76,27 +130,30 @@ fun LanguageSelector(
             ) {
                 supportedLanguages.forEach { language ->
                     DropdownMenuItem(
-                        text = { Text(getLanguageDisplayName(language)) },
-                        onClick = { onTargetLanguageSelected(language) }
+                        text = { 
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(getLanguageName(language))
+                                if (language !in downloadedLanguages) {
+                                    Icon(
+                                        Icons.Default.Download,
+                                        contentDescription = "Chưa tải xuống",
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        },
+                        onClick = { 
+                            onTargetLanguageSelected(language)
+                            showTargetLanguageMenu = false
+                        }
                     )
                 }
             }
         }
-    }
-}
-
-private fun getLanguageDisplayName(languageCode: String): String {
-    return when (languageCode) {
-        "vi" -> "Tiếng Việt"
-        "en" -> "Tiếng Anh"
-        "ja" -> "Tiếng Nhật"
-        "ko" -> "Tiếng Hàn"
-        "zh" -> "Tiếng Trung"
-        "fr" -> "Tiếng Pháp"
-        "de" -> "Tiếng Đức"
-        "es" -> "Tiếng Tây Ban Nha"
-        "it" -> "Tiếng Ý"
-        "ru" -> "Tiếng Nga"
-        else -> languageCode
     }
 } 

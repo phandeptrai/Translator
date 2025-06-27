@@ -1,7 +1,10 @@
 package com.example.translator
 
+import android.app.Application
 import android.content.Context
 import android.util.Log
+import android.widget.Toast
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.mlkit.nl.translate.TranslateLanguage
@@ -9,6 +12,7 @@ import com.example.translator.ui.screens.TranslationHistoryItem
 import com.example.translator.translation.*
 import com.example.translator.texttospeech.*
 import com.example.translator.utils.managers.*
+import dagger.hilt.android.internal.Contexts.getApplication
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,13 +21,29 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 
-class TranslatorViewModel : ViewModel() {
+// Map để lấy tên ngôn ngữ tiếng Việt
+private val languageNameMap = mapOf(
+    "vi" to "Tiếng Việt",
+    "en" to "Tiếng Anh",
+    "ja" to "Tiếng Nhật",
+    "zh" to "Tiếng Trung",
+    "ko" to "Tiếng Hàn",
+    "fr" to "Tiếng Pháp",
+    "pt" to "Tiếng Bồ Đào Nha"
+)
+
+private fun getLanguageName(code: String): String {
+    return languageNameMap[code] ?: code.uppercase()
+}
+
+class TranslatorViewModel(application: Application) : AndroidViewModel(application) {
     private val TAG = "TranslatorViewModel"
 
     private lateinit var translationManager: TranslationManager
     private lateinit var textToSpeechManager: TextToSpeechManager
     private lateinit var translationHistoryManager: TranslationHistoryManager
     private lateinit var shareManager: ShareManager
+    private lateinit var offlineLanguageManager: OfflineLanguageManager
 
     // Trạng thái UI
     private val _sourceText = MutableStateFlow("")
@@ -50,8 +70,11 @@ class TranslatorViewModel : ViewModel() {
     private val _translationHistory = MutableStateFlow<List<TranslationHistoryItem>>(emptyList())
     val translationHistory: StateFlow<List<TranslationHistoryItem>> = _translationHistory.asStateFlow()
 
-    private val _showHistory = MutableStateFlow(false)
-    val showHistory: StateFlow<Boolean> = _showHistory.asStateFlow()
+    private val _downloadedLanguages = MutableStateFlow<Set<String>>(emptySet())
+    val downloadedLanguages: StateFlow<Set<String>> = _downloadedLanguages.asStateFlow()
+
+    private val _downloadingLanguage = MutableStateFlow<String?>(null)
+    val downloadingLanguage: StateFlow<String?> = _downloadingLanguage.asStateFlow()
 
     private var translateJob: Job? = null
 
@@ -61,6 +84,10 @@ class TranslatorViewModel : ViewModel() {
         textToSpeechManager = TextToSpeechManager(context)
         translationHistoryManager = TranslationHistoryManager(context)
         shareManager = ShareManager(context)
+        offlineLanguageManager = OfflineLanguageManager(context)
+        
+        // Tải danh sách ngôn ngữ đã tải xuống
+        loadDownloadedLanguages()
     }
 
     // Cập nhật văn bản nguồn
@@ -108,21 +135,62 @@ class TranslatorViewModel : ViewModel() {
     // Thực hiện dịch văn bản
     private fun translate() {
         viewModelScope.launch {
-            val result = translationManager.translate(
-                _sourceText.value,
-                _sourceLanguage.value,
-                _targetLanguage.value
-            )
-            _translatedText.value = result
-
-            if (result.isNotBlank()) {
-                translationHistoryManager.addToHistory(
+            if (_sourceText.value.isBlank()) {
+                return@launch
+            }
+            
+            // Kiểm tra mô hình offline cho cả ngôn ngữ nguồn và đích
+            val sourceDownloaded = offlineLanguageManager.isLanguageDownloaded(_sourceLanguage.value)
+            val targetDownloaded = offlineLanguageManager.isLanguageDownloaded(_targetLanguage.value)
+            
+            if (!sourceDownloaded || !targetDownloaded) {
+                val missingLanguages = mutableListOf<String>()
+                if (!sourceDownloaded) {
+                    missingLanguages.add(getLanguageName(_sourceLanguage.value))
+                }
+                if (!targetDownloaded) {
+                    missingLanguages.add(getLanguageName(_targetLanguage.value))
+                }
+                
+                val message = if (missingLanguages.size == 1) {
+                    "Bạn cần tải xuống ngôn ngữ ${missingLanguages[0]} để dịch offline. Bấm vào icon tải xuống để tải ngôn ngữ."
+                } else {
+                    "Bạn cần tải xuống các ngôn ngữ: ${missingLanguages.joinToString(", ")} để dịch offline. Bấm vào icon tải xuống để tải ngôn ngữ."
+                }
+                
+                Toast.makeText(getApplication(), message, Toast.LENGTH_LONG).show()
+                _translatedText.value = ""
+                return@launch
+            }
+            
+            _isTranslating.value = true
+            try {
+                val result = translationManager.translate(
                     _sourceText.value,
-                    result,
                     _sourceLanguage.value,
                     _targetLanguage.value
                 )
-                updateHistory()
+                _translatedText.value = result
+
+                if (result.isNotBlank()) {
+                    translationHistoryManager.addToHistory(
+                        _sourceText.value,
+                        result,
+                        _sourceLanguage.value,
+                        _targetLanguage.value
+                    )
+                    updateHistory()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Translation error: ${e.message}")
+                Toast.makeText(
+                    getApplication(),
+                    "Lỗi khi dịch: ${e.message}",
+                    Toast.LENGTH_SHORT
+                ).show()
+                _translatedText.value = ""
+            } finally {
+                _isTranslating.value = false
             }
         }
     }
@@ -137,21 +205,12 @@ class TranslatorViewModel : ViewModel() {
         shareManager.shareText(_translatedText.value)
     }
 
-    // Hiển thị/ẩn lịch sử dịch
-    fun toggleHistoryView() {
-        _showHistory.value = !_showHistory.value
-        if (_showHistory.value) {
-            updateHistory()
-        }
-    }
-
     // Sử dụng một mục từ lịch sử
     fun useHistoryItem(item: TranslationHistoryItem) {
         _sourceText.value = item.sourceText
         _translatedText.value = item.translatedText
         _sourceLanguage.value = item.sourceLanguage
         _targetLanguage.value = item.targetLanguage
-        _showHistory.value = false
     }
 
     // Xóa một mục khỏi lịch sử
@@ -164,6 +223,62 @@ class TranslatorViewModel : ViewModel() {
     fun clearHistory() {
         translationHistoryManager.clearHistory()
         updateHistory()
+    }
+
+    // Tải xuống ngôn ngữ offline
+    fun downloadLanguage(languageCode: String) {
+        viewModelScope.launch {
+            try {
+                _downloadingLanguage.value = languageCode
+                _isModelDownloading.value = true
+                offlineLanguageManager.downloadLanguage(languageCode)
+                loadDownloadedLanguages()
+                Toast.makeText(
+                    getApplication(),
+                    "Đã tải xuống ngôn ngữ $languageCode",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error downloading language: ${e.message}")
+                Toast.makeText(
+                    getApplication(),
+                    "Lỗi khi tải xuống ngôn ngữ: ${e.message}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } finally {
+                _downloadingLanguage.value = null
+                _isModelDownloading.value = false
+            }
+        }
+    }
+
+    // Xóa ngôn ngữ offline
+    fun deleteLanguage(languageCode: String) {
+        viewModelScope.launch {
+            try {
+                offlineLanguageManager.deleteLanguage(languageCode)
+                loadDownloadedLanguages()
+                Toast.makeText(
+                    getApplication(),
+                    "Đã xóa ngôn ngữ $languageCode",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error deleting language: ${e.message}")
+                Toast.makeText(
+                    getApplication(),
+                    "Lỗi khi xóa ngôn ngữ: ${e.message}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    // Tải danh sách ngôn ngữ đã tải xuống
+    fun loadDownloadedLanguages() {
+        viewModelScope.launch {
+            _downloadedLanguages.value = offlineLanguageManager.getDownloadedLanguages()
+        }
     }
 
     override fun onCleared() {
