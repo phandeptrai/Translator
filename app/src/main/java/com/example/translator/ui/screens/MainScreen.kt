@@ -30,7 +30,8 @@ import kotlinx.coroutines.launch
 fun MainScreen(
     viewModel: TranslatorViewModel = viewModel(),
     onShowHistory: () -> Unit,
-    onShowOfflineLanguages: () -> Unit
+    onShowOfflineLanguages: () -> Unit,
+    onShowSettings: () -> Unit
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
@@ -108,11 +109,19 @@ fun MainScreen(
         viewModel.initManagers(context)
     }
 
+    // Kiểm tra văn bản từ Intent (tính năng dịch khi chia sẻ)
+    LaunchedEffect(Unit) {
+        viewModel.checkForSharedText()
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Ứng dụng Dịch") },
                 actions = {
+                    IconButton(onClick = onShowSettings) {
+                        Icon(Icons.Default.Settings, contentDescription = "Cài đặt")
+                    }
                     IconButton(onClick = onShowOfflineLanguages) {
                         Icon(Icons.Default.Download, contentDescription = "Tải xuống ngôn ngữ offline")
                     }

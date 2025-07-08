@@ -96,6 +96,9 @@ dependencies {
 
     implementation("com.google.mlkit:translate:17.0.2")
 
+    // Jetpack Glance for App Widgets
+    implementation("androidx.glance:glance-appwidget:1.1.0")
+
     // Testing dependencies
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

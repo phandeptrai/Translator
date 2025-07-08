@@ -11,11 +11,13 @@ import com.example.translator.TranslatorViewModel
 import com.example.translator.ui.screens.HistoryScreen
 import com.example.translator.ui.screens.MainScreen
 import com.example.translator.ui.screens.OfflineLanguagesScreen
+import com.example.translator.ui.screens.SettingsScreen
 
 sealed class Screen(val route: String) {
     object Main : Screen("main")
     object History : Screen("history")
     object OfflineLanguages : Screen("offline_languages")
+    object Settings : Screen("settings")
 }
 
 @Composable
@@ -28,7 +30,8 @@ fun AppNavGraph(
             MainScreen(
                 viewModel = viewModel,
                 onShowHistory = { navController.navigate(Screen.History.route) },
-                onShowOfflineLanguages = { navController.navigate(Screen.OfflineLanguages.route) }
+                onShowOfflineLanguages = { navController.navigate(Screen.OfflineLanguages.route) },
+                onShowSettings = { navController.navigate(Screen.Settings.route) }
             )
         }
         composable(Screen.History.route) {
@@ -44,6 +47,11 @@ fun AppNavGraph(
         composable(Screen.OfflineLanguages.route) {
             OfflineLanguagesScreen(
                 viewModel = viewModel,
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(Screen.Settings.route) {
+            SettingsScreen(
                 onBack = { navController.popBackStack() }
             )
         }

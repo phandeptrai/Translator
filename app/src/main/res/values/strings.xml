@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">translator</string>
+    <string name="accessibility_service_description">Dịch nhanh văn bản khi bôi đen hoặc copy</string>
 </resources>

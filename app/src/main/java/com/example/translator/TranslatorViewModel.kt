@@ -88,6 +88,9 @@ class TranslatorViewModel(application: Application) : AndroidViewModel(applicati
         
         // Tải danh sách ngôn ngữ đã tải xuống
         loadDownloadedLanguages()
+        
+        // Kiểm tra và xử lý văn bản từ Intent (tính năng dịch khi bôi đen)
+        handleSharedText()
     }
 
     // Cập nhật văn bản nguồn
@@ -279,6 +282,42 @@ class TranslatorViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             _downloadedLanguages.value = offlineLanguageManager.getDownloadedLanguages()
         }
+    }
+
+    // Xử lý văn bản nhận được từ Intent (tính năng dịch khi chia sẻ)
+    private fun handleSharedText() {
+        val sharedText = SharedTextManager.getText()
+        if (!sharedText.isNullOrBlank()) {
+            // Tự động cập nhật văn bản nguồn và dịch
+            updateSourceText(sharedText)
+            
+            // Tự động chuyển sang ngôn ngữ phù hợp nếu cần
+            autoDetectAndSetLanguage(sharedText)
+        }
+    }
+
+    // Tự động phát hiện ngôn ngữ và đặt ngôn ngữ nguồn phù hợp
+    private fun autoDetectAndSetLanguage(text: String) {
+        // Logic đơn giản: nếu có ký tự tiếng Việt thì đặt nguồn là Việt, ngược lại là Anh
+        val hasVietnameseChars = text.any { it in 'à'..'ỹ' || it in 'À'..'Ỹ' }
+        val hasEnglishChars = text.any { it.isLetter() && it in 'a'..'z' || it in 'A'..'Z' }
+        
+        when {
+            hasVietnameseChars -> {
+                _sourceLanguage.value = "vi"
+                _targetLanguage.value = "en"
+            }
+            hasEnglishChars -> {
+                _sourceLanguage.value = "en"
+                _targetLanguage.value = "vi"
+            }
+            // Nếu không phát hiện được, giữ nguyên cài đặt hiện tại
+        }
+    }
+
+    // Hàm public để MainActivity có thể gọi khi nhận Intent mới
+    fun checkForSharedText() {
+        handleSharedText()
     }
 
     override fun onCleared() {
